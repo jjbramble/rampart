@@ -19,3 +19,9 @@ export function launchVelocity(from: Vec, to: Vec, power: number): Vec {
 export function positionAt(start: Vec, v: Vec, t: number, gravity = BOW.gravity): Vec {
   return { x: start.x + v.x * t, y: start.y + v.y * t + 0.5 * gravity * t * t };
 }
+
+/** True if a velocity is heading down at least `minDeg` below horizontal (a plunging shot). */
+export function isPlunging(v: Vec, minDeg: number): boolean {
+  if (v.y <= 0) return false;
+  return Math.atan2(v.y, Math.abs(v.x)) >= (minDeg * Math.PI) / 180;
+}

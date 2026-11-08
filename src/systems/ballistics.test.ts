@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOW } from '../config';
-import { drawPower, launchVelocity, positionAt } from './ballistics';
+import { drawPower, isPlunging, launchVelocity, positionAt } from './ballistics';
 
 describe('ballistics', () => {
   it('clamps draw power to 0..1', () => {
@@ -20,5 +20,12 @@ describe('ballistics', () => {
   it('follows a gravity arc', () => {
     const p = positionAt({ x: 0, y: 0 }, { x: 100, y: -100 }, 1, 200);
     expect(p).toEqual({ x: 100, y: 0 });
+  });
+
+  it('detects plunging shots by descent angle', () => {
+    expect(isPlunging({ x: 100, y: -50 }, 30)).toBe(false); // still rising
+    expect(isPlunging({ x: 100, y: 20 }, 30)).toBe(false);  // flat
+    expect(isPlunging({ x: 100, y: 100 }, 30)).toBe(true);  // 45° down
+    expect(isPlunging({ x: -100, y: 100 }, 30)).toBe(true); // direction doesn't matter
   });
 });
