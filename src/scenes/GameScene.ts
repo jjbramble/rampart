@@ -1,13 +1,23 @@
 import Phaser from 'phaser';
-import { BOW, CASTLE, GAME_H, GAME_W, GROUND_Y, TROOPS, WALL } from '../config';
+import { BOW, CASTLE, ENEMIES, GAME_H, GAME_W, GROUND_Y, WALL, WAVES } from '../config';
 import { Archer } from '../entities/Archer';
 import { Arrow } from '../entities/Arrow';
+import { BatteringRam } from '../entities/BatteringRam';
 import { Enemy } from '../entities/Enemy';
+import { Flyer } from '../entities/Flyer';
 import { GroundTroop } from '../entities/GroundTroop';
+import { Shieldbearer } from '../entities/Shieldbearer';
 import { drawPower, launchVelocity, positionAt } from '../systems/ballistics';
 import { Score } from '../systems/Score';
+import { EnemyKind, planWave, speedMultiplier } from '../systems/waves';
 
-/** Milestone 1: feel prototype — draw/release bow, arcing arrows, marching troops, score, castle HP. */
+const WAVE_INTRO: Partial<Record<number, string>> = {
+  2: 'kite-riders swoop in from above',
+  3: 'shields stop flat shots: lob arrows onto them',
+  4: 'a battering ram! keep shooting',
+};
+
+/** Draw/release bow, arcing arrows, waves of mixed siegers, score, castle HP. */
 export class GameScene extends Phaser.Scene {
   private archer!: Archer;
   private arrows!: Phaser.GameObjects.Group;
@@ -20,7 +30,10 @@ export class GameScene extends Phaser.Scene {
   private quiver: number = BOW.quiverSize;
   private reloadTimer = 0;
   private castleHp: number = CASTLE.maxHp;
-  private spawnGap: number = TROOPS.spawnMs;
+  private wave = 0;
+  private pendingSpawns = 0;     // enemies of this wave not yet on the field
+  private waveActive = false;
+  private gateHitThisWave = false;
   private over = false;
 
   constructor() {
@@ -31,7 +44,9 @@ export class GameScene extends Phaser.Scene {
     this.score = new Score();
     this.quiver = BOW.quiverSize;
     this.castleHp = CASTLE.maxHp;
-    this.spawnGap = TROOPS.spawnMs;
+    this.wave = 0;
+    this.pendingSpawns = 0;
+    this.waveActive = false;
     this.drawingSince = null;
     this.over = false;
 
@@ -51,7 +66,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.release(p));
     this.input.on('gameout', () => (this.drawingSince = null));
 
-    this.time.delayedCall(TROOPS.firstSpawnMs, () => this.spawnTroop());
+    this.time.delayedCall(WAVES.firstDelayMs, () => this.startWave());
     this.updateHud();
   }
 
@@ -59,6 +74,9 @@ export class GameScene extends Phaser.Scene {
     if (this.over) return;
     this.reload(delta);
     this.drawPreview();
+    if (this.waveActive && this.pendingSpawns === 0 && this.enemies.getChildren().every((e) => (e as Enemy).dead)) {
+      this.endWave();
+    }
   }
 
   // --- bow -------------------------------------------------------------------------------
@@ -114,20 +132,59 @@ export class GameScene extends Phaser.Scene {
 
   // --- enemies & scoring -----------------------------------------------------------------
 
-  private spawnTroop(): void {
+  private startWave(): void {
     if (this.over) return;
-    const speed = Phaser.Math.Between(TROOPS.minSpeed, TROOPS.maxSpeed);
-    const troop = new GroundTroop(this, GAME_W + 10, speed);
-    troop.once('breach', () => this.damageCastle(1));
-    this.enemies.add(troop);
-    this.spawnGap = Math.max(TROOPS.minSpawnMs, this.spawnGap - TROOPS.spawnRampMs);
-    this.time.delayedCall(this.spawnGap, () => this.spawnTroop());
+    this.wave += 1;
+    this.gateHitThisWave = false;
+    const plan = planWave(this.wave);
+    this.pendingSpawns = plan.length;
+    this.waveActive = true;
+    this.banner(`WAVE ${this.wave}`, WAVE_INTRO[this.wave]);
+    const mul = speedMultiplier(this.wave);
+    for (const { kind, at } of plan) {
+      this.time.delayedCall(WAVES.bannerMs + at, () => {
+        if (this.over) return;
+        this.spawn(kind, mul);
+        this.pendingSpawns -= 1;
+      });
+    }
+    this.updateHud();
+  }
+
+  private endWave(): void {
+    this.waveActive = false;
+    const clear = WAVES.clearBonus * this.wave;
+    const flawless = this.gateHitThisWave ? 0 : WAVES.flawlessBonus;
+    this.score.bonus(clear + flawless);
+    this.quiver = BOW.quiverSize;
+    this.banner('WAVE CLEARED', `+${clear}${flawless ? `   flawless +${flawless}` : ''}`);
+    this.updateHud();
+    this.time.delayedCall(WAVES.breakMs, () => this.startWave());
+  }
+
+  private spawn(kind: EnemyKind, speedMul: number): void {
+    const [lo, hi] = ENEMIES[kind].speed;
+    const speed = Phaser.Math.FloatBetween(lo, hi) * speedMul;
+    const x = GAME_W + 16;
+    const enemy =
+      kind === 'flyer' ? new Flyer(this, x, speed)
+      : kind === 'shield' ? new Shieldbearer(this, x, speed)
+      : kind === 'ram' ? new BatteringRam(this, x, speed)
+      : new GroundTroop(this, x, speed);
+    enemy.once('breach', () => this.damageCastle(enemy.gateDamage));
+    this.enemies.add(enemy);
   }
 
   private onHit(arrow: Arrow, enemy: Enemy): void {
     if (arrow.hitSomething || arrow.landed || enemy.dead) return;
     arrow.hitSomething = true;
+    const v = { x: arrow.body.velocity.x, y: arrow.body.velocity.y };
     arrow.destroy();
+    if (enemy.blocks(v)) {
+      enemy.flash(0xf7dc6f);
+      this.floatText(enemy.x, enemy.y - 12, 'blocked', '#d5dbdb');
+      return this.onMiss();
+    }
     if (enemy.damage(1)) {
       const pts = this.score.kill(enemy.bonus);
       this.floatText(enemy.x, enemy.y - 12, `+${pts}`);
@@ -144,6 +201,7 @@ export class GameScene extends Phaser.Scene {
   private damageCastle(amount: number): void {
     if (this.over) return;
     this.castleHp = Math.max(0, this.castleHp - amount);
+    this.gateHitThisWave = true;
     this.cameras.main.shake(120, 0.006);
     this.updateHud();
     if (this.castleHp === 0) this.gameOver();
@@ -151,12 +209,13 @@ export class GameScene extends Phaser.Scene {
 
   private gameOver(): void {
     this.over = true;
+    this.waveActive = false;
     this.drawingSince = null;
     this.preview.clear();
     this.enemies.getChildren().forEach((e) => ((e as Enemy).body.enable = false));
     this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x000000, 0.55);
     this.add
-      .text(GAME_W / 2, GAME_H / 2, `THE GATE HAS FALLEN\n\nScore ${this.score.points}   Best combo ${this.score.best}\n\nclick or tap to try again`, {
+      .text(GAME_W / 2, GAME_H / 2, `THE GATE HAS FALLEN\n\nWave ${this.wave}   Score ${this.score.points}   Best combo ${this.score.best}\n\nclick or tap to try again`, {
         fontFamily: 'monospace', fontSize: '12px', color: '#f4f1de', align: 'center',
       })
       .setOrigin(0.5);
@@ -175,6 +234,24 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x4a3424).fillRect(WALL.width - 22, GROUND_Y - 30, 18, 30); // gate
   }
 
+  private banner(title: string, subtitle?: string): void {
+    const t = this.add
+      .text(GAME_W / 2 + WALL.width / 2, 70, subtitle ? `${title}\n${subtitle}` : title, {
+        fontFamily: 'monospace', fontSize: '12px', color: '#f4f1de', align: 'center',
+        stroke: '#1b1f2a', strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setAlpha(0);
+    this.tweens.chain({
+      targets: t,
+      tweens: [
+        { alpha: 1, duration: 200 },
+        { alpha: 0, delay: WAVES.bannerMs, duration: 400 },
+      ],
+      onComplete: () => t.destroy(),
+    });
+  }
+
   private floatText(x: number, y: number, msg: string, color = '#f9e79f'): void {
     const t = this.add.text(x, y, msg, { fontFamily: 'monospace', fontSize: '9px', color }).setOrigin(0.5);
     this.tweens.add({ targets: t, y: y - 14, alpha: 0, duration: 700, onComplete: () => t.destroy() });
@@ -183,7 +260,7 @@ export class GameScene extends Phaser.Scene {
   private updateHud(): void {
     const arrows = '|'.repeat(this.quiver).padEnd(BOW.quiverSize, '.');
     this.hud.setText(
-      `SCORE ${this.score.points}   x${this.score.multiplier}   COMBO ${this.score.combo}   ARROWS ${arrows}   GATE ${this.castleHp}/${CASTLE.maxHp}`,
+      `WAVE ${Math.max(1, this.wave)}  SCORE ${this.score.points}  x${this.score.multiplier}  COMBO ${this.score.combo}  ARROWS ${arrows}  GATE ${this.castleHp}/${CASTLE.maxHp}`,
     );
   }
 }

@@ -38,4 +38,12 @@ describe('Score', () => {
     for (let i = 0; i < 3; i++) s.kill();
     expect(s.kill(50)).toBe((BASE_POINTS + 50) * 2);
   });
+
+  it('adds flat bonuses without touching the combo', () => {
+    const s = new Score();
+    for (let i = 0; i < 3; i++) s.kill();
+    s.bonus(500);
+    expect(s.points).toBe(BASE_POINTS * 3 + 500);
+    expect(s.combo).toBe(3);
+  });
 });

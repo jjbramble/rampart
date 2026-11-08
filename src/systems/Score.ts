@@ -25,4 +25,9 @@ export class Score {
   miss(): void {
     this.combo = 0;
   }
+
+  /** Flat points (e.g. wave clear) — no multiplier, doesn't touch the combo. */
+  bonus(points: number): void {
+    this.points += points;
+  }
 }
