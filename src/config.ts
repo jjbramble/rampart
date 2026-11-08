@@ -22,7 +22,8 @@ export const CASTLE = { maxHp: 10 };
 export const WAVES = {
   firstDelayMs: 1200,    // pause before wave 1
   bannerMs: 1400,        // "WAVE n" banner, spawns start after it
-  breakMs: 3200,         // breather between waves (quiver refills)
+  pickDelayMs: 1300,     // after "WAVE CLEARED", before the upgrade cards appear
+  nextWaveMs: 1200,      // after picking an upgrade, before the next wave's banner
   startGapMs: 1900,      // average gap between spawns in wave 1
   minGapMs: 650,         // gap never shrinks below this
   gapRampMs: 140,        // gap shrinks by this much per wave
@@ -43,3 +44,13 @@ export const ENEMIES = {
 
 /** Shields only stop arrows coming in flatter than this; plunging shots get over the top. */
 export const SHIELD_PLUNGE_DEG = 30;
+
+// Between-wave upgrades (see src/systems/upgrades.ts for which can stack and how often).
+export const UPGRADE = {
+  quiverPlus: 2,         // extra arrows per pick
+  reloadMul: 0.8,        // reload interval multiplier per pick
+  drawMul: 0.8,          // full-draw time multiplier per pick
+  fortifyPlus: 3,        // extra max gate HP per pick (also heals that much)
+  repairHp: 4,           // gate HP restored by a repair
+  volleySpreadDeg: 5,    // angle between arrows in a volley
+};

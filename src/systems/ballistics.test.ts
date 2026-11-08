@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { BOW } from '../config';
-import { drawPower, isPlunging, launchVelocity, positionAt } from './ballistics';
+import { drawPower, isPlunging, launchVelocity, positionAt, rotate } from './ballistics';
 
 describe('ballistics', () => {
   it('clamps draw power to 0..1', () => {
     expect(drawPower(-10)).toBe(0);
     expect(drawPower(BOW.fullDrawMs / 2)).toBeCloseTo(0.5);
     expect(drawPower(BOW.fullDrawMs * 3)).toBe(1);
+    expect(drawPower(100, 200)).toBeCloseTo(0.5); // faster draw from upgrades
   });
 
   it('aims toward the target with speed scaled by power', () => {
@@ -27,5 +28,12 @@ describe('ballistics', () => {
     expect(isPlunging({ x: 100, y: 20 }, 30)).toBe(false);  // flat
     expect(isPlunging({ x: 100, y: 100 }, 30)).toBe(true);  // 45° down
     expect(isPlunging({ x: -100, y: 100 }, 30)).toBe(true); // direction doesn't matter
+  });
+
+  it('rotates vectors without changing speed', () => {
+    const r = rotate({ x: 100, y: 0 }, Math.PI / 2);
+    expect(r.x).toBeCloseTo(0);
+    expect(r.y).toBeCloseTo(100);
+    expect(Math.hypot(...Object.values(rotate({ x: 30, y: -40 }, 0.3)))).toBeCloseTo(50);
   });
 });
