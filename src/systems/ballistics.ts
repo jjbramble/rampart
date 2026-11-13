@@ -4,8 +4,8 @@ import { BOW } from '../config';
 export interface Vec { x: number; y: number }
 
 /** Draw power 0..1 from how long the bow has been held. */
-export function drawPower(heldMs: number): number {
-  return Math.max(0, Math.min(1, heldMs / BOW.fullDrawMs));
+export function drawPower(heldMs: number, fullDrawMs: number = BOW.fullDrawMs): number {
+  return Math.max(0, Math.min(1, heldMs / fullDrawMs));
 }
 
 /** Launch velocity aiming from `from` toward `to` at the given power. */
@@ -24,4 +24,10 @@ export function positionAt(start: Vec, v: Vec, t: number, gravity = BOW.gravity)
 export function isPlunging(v: Vec, minDeg: number): boolean {
   if (v.y <= 0) return false;
   return Math.atan2(v.y, Math.abs(v.x)) >= (minDeg * Math.PI) / 180;
+}
+
+/** `v` rotated by `rad` (positive is clockwise on screen, since y points down). */
+export function rotate(v: Vec, rad: number): Vec {
+  const c = Math.cos(rad), s = Math.sin(rad);
+  return { x: v.x * c - v.y * s, y: v.x * s + v.y * c };
 }

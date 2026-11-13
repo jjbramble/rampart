@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_H, GAME_W } from './config';
 import { GameScene } from './scenes/GameScene';
+import { TitleScene } from './scenes/TitleScene';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -12,7 +13,7 @@ const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   physics: { default: 'arcade', arcade: { debug: false } },
   input: { activePointers: 2 },
-  scene: [GameScene],
+  scene: [TitleScene, GameScene],
 });
 
 // Handy for poking at the game from the console / automated checks during development.
